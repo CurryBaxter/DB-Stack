@@ -241,5 +241,7 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/app_db_password.txt
   pgbouncer_auth_password:
     file: ${SECRETS_DIR:-./secrets}/pgbouncer_auth_password.txt
+  postgres_exporter_password:
+    file: ${SECRETS_DIR:-./secrets}/postgres_exporter_password.txt
   postgres_replication_password:
     file: ${SECRETS_DIR:-./secrets}/postgres_replication_password.txt
