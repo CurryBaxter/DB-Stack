@@ -56,13 +56,19 @@ Produktionsnahe Docker-Compose-Basis für einen self-managed PostgreSQL-Server a
 ## Inbetriebnahme
 
 1. `.env.example` nach `.env` kopieren und Werte anpassen.
-2. `secrets/` anlegen und alle Passwortdateien mit `chmod 600` ablegen.
-3. Stack starten: `docker compose up -d --build`
-4. Nach dem ersten erfolgreichen Start `pgbackrest` prüfen:
+2. `.env` mit den Laufzeit-Passwörtern für `PgBouncer`, `postgres_exporter` und `Grafana` ergänzen.
+3. `secrets/` anlegen und die PostgreSQL-seitigen Passwortdateien mit `chmod 600` ablegen.
+4. Stack starten: `docker compose up -d --build`
+5. Nach dem ersten erfolgreichen Start `pgbackrest` prüfen:
    - `docker compose exec pgbackrest pgbackrest --stanza=main info`
    - `docker compose exec pgbackrest pgbackrest --stanza=main check`
-5. Erstes Full Backup ausführen:
+6. Erstes Full Backup ausführen:
    - `docker compose exec -T pgbackrest pgbackrest --stanza=main backup --type=full`
+
+Für wiederholbare Deployments gilt in dieser Basis:
+
+- PostgreSQL-Primary und Replikation nutzen Docker-Secrets.
+- `PgBouncer`, `postgres_exporter` und `Grafana` nutzen `.env`, weil die verwendeten Images im Compose-Betrieb Secret-Dateien nicht zuverlässig konsumieren.
 
 ## Backup-Strategie
 

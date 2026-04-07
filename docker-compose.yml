@@ -76,7 +76,7 @@ services:
       TZ: ${TZ:-UTC}
       APP_DB_NAME: ${APP_DB_NAME}
       APP_DB_USER: ${APP_DB_USER}
-      APP_DB_PASSWORD_FILE: /run/secrets/app_db_password
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       PGBACKREST_STANZA: ${PGBACKREST_STANZA:-main}
       PGBOUNCER_POOL_MODE: ${PGBOUNCER_POOL_MODE:-transaction}
       PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
@@ -85,18 +85,14 @@ services:
       PGBOUNCER_RESERVE_POOL_TIMEOUT: ${PGBOUNCER_RESERVE_POOL_TIMEOUT:-5}
       PGBOUNCER_SERVER_RESET_QUERY: ${PGBOUNCER_SERVER_RESET_QUERY:-DISCARD ALL}
       PGBOUNCER_AUTH_USER: ${PGBOUNCER_AUTH_USER:-pgbouncer_auth}
-      PGBOUNCER_AUTH_PASSWORD_FILE: /run/secrets/pgbouncer_auth_password
+      PGBOUNCER_AUTH_PASSWORD: ${PGBOUNCER_AUTH_PASSWORD}
       PGBOUNCER_ADMIN_USERS: ${PGBOUNCER_ADMIN_USERS:-postgres}
       PGBOUNCER_STATS_USERS: ${PGBOUNCER_STATS_USERS:-postgres_exporter}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${POSTGRES_PORT_INTERNAL:-5432}
       POSTGRES_DB: ${POSTGRES_DEFAULT_DB:-postgres}
       PGBOUNCER_LISTEN_PORT: ${PGBOUNCER_PORT_INTERNAL:-6432}
-    secrets:
-      - app_db_password
-      - pgbouncer_auth_password
     volumes:
-      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
       - ./pgbouncer/entrypoint.sh:/entrypoint-custom.sh:ro
     entrypoint: ["/bin/sh", "/entrypoint-custom.sh"]
     ports:
@@ -149,17 +145,10 @@ services:
     environment:
       DATA_SOURCE_URI: "postgres:${POSTGRES_PORT_INTERNAL:-5432}/${POSTGRES_DEFAULT_DB:-postgres}?sslmode=disable"
       DATA_SOURCE_USER: ${POSTGRES_EXPORTER_USER:-postgres_exporter}
+      DATA_SOURCE_PASS: ${POSTGRES_EXPORTER_PASSWORD}
       PG_EXPORTER_AUTO_DISCOVER_DATABASES: "false"
       PG_EXPORTER_DISABLE_DEFAULT_METRICS: "false"
       PG_EXPORTER_DISABLE_SETTINGS_METRICS: "false"
-    secrets:
-      - postgres_exporter_password
-    command:
-      - /bin/sh
-      - -ec
-      - |
-        export DATA_SOURCE_PASS="$$(cat /run/secrets/postgres_exporter_password)"
-        exec postgres_exporter
     expose:
       - "9187"
     networks:
@@ -212,12 +201,10 @@ services:
       GF_SERVER_DOMAIN: ${GRAFANA_DOMAIN:-localhost}
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_INSTALL_PLUGINS: ""
-    secrets:
-      - grafana_admin_password
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -254,9 +241,5 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/app_db_password.txt
   pgbouncer_auth_password:
     file: ${SECRETS_DIR:-./secrets}/pgbouncer_auth_password.txt
-  postgres_exporter_password:
-    file: ${SECRETS_DIR:-./secrets}/postgres_exporter_password.txt
   postgres_replication_password:
     file: ${SECRETS_DIR:-./secrets}/postgres_replication_password.txt
-  grafana_admin_password:
-    file: ${SECRETS_DIR:-./secrets}/grafana_admin_password.txt
