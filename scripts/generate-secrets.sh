@@ -9,6 +9,7 @@ set -euo pipefail
 SECRETS_DIR="${1:-./secrets}"
 
 mkdir -p "${SECRETS_DIR}"
+chmod 700 "${SECRETS_DIR}"
 
 generate() {
   local file="${SECRETS_DIR}/$1"
@@ -20,7 +21,7 @@ generate() {
   fi
 
   openssl rand -base64 "$length" | tr -d '\n' > "$file"
-  chmod 600 "$file"
+  chmod 644 "$file"
   echo "  NEW   $file"
 }
 
@@ -39,7 +40,7 @@ for f in repo2_s3_key.txt repo2_s3_secret.txt; do
   file="${SECRETS_DIR}/$f"
   if [ ! -f "$file" ]; then
     touch "$file"
-    chmod 600 "$file"
+    chmod 644 "$file"
     echo "  NEW   $file (empty placeholder — fill in when enabling repo2)"
   else
     echo "  SKIP  $file (already exists)"
