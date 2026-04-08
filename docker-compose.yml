@@ -54,7 +54,6 @@ services:
       - pgbackrest_repo:/var/lib/pgbackrest
       - ./postgres/conf:/etc/postgres/templates:ro
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
-      - ./pgbackrest/pgbackrest.conf.template:/etc/pgbackrest/pgbackrest.conf.template:ro
     command: ["/usr/local/bin/postgres-entrypoint.sh"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DEFAULT_DB:-postgres} -h /var/run/postgresql"]

@@ -23,7 +23,7 @@ psql -v ON_ERROR_STOP=1 \
   --set exporter_password="$EXPORTER_PASSWORD" \
   --set replication_user="$REPLICATION_USER" \
   --set replication_password="$REPLICATION_PASSWORD" <<'EOSQL'
-DO \$\$
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_db_user') THEN
     EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'app_db_user', :'app_db_password');
@@ -49,15 +49,15 @@ BEGIN
     EXECUTE format('ALTER ROLE %I WITH LOGIN REPLICATION PASSWORD %L', :'replication_user', :'replication_password');
   END IF;
 END
-\$\$;
+$$;
 
-DO \$\$
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'app_db_name') THEN
     EXECUTE format('CREATE DATABASE %I OWNER %I', :'app_db_name', :'app_db_user');
   END IF;
 END
-\$\$;
+$$;
 
 SELECT format('GRANT pg_monitor TO %I', :'exporter_user') \gexec
 SELECT format('GRANT pg_read_all_stats TO %I', :'exporter_user') \gexec
@@ -77,11 +77,11 @@ RETURNS TABLE(username text, password text)
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = pg_catalog
-AS \$\$
+AS $$
   SELECT usename::text, passwd::text
   FROM pg_shadow
   WHERE usename = in_username;
-\$\$;
+$$;
 
 REVOKE ALL ON SCHEMA pgbouncer FROM PUBLIC;
 SELECT format('GRANT USAGE ON SCHEMA pgbouncer TO %I', :'pgbouncer_auth_user') \gexec
