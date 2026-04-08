@@ -7,6 +7,7 @@ envsubst < /etc/postgres/templates/postgresql.conf.template > /tmp/postgres-conf
 envsubst < /etc/postgres/templates/pg_hba.conf.template > /tmp/postgres-config/pg_hba.conf
 
 # Render minimal pgbackrest.conf for archive_command
+mkdir -p /etc/pgbackrest
 cat > /etc/pgbackrest/pgbackrest.conf <<PGBR
 [global]
 repo1-path=/var/lib/pgbackrest
