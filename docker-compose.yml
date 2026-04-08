@@ -204,7 +204,7 @@ services:
     command:
       - |
         export PGBOUNCER_EXPORTER_PASS="$$(cat /run/secrets/postgres_exporter_password)"
-        exec /bin/pgbouncer-exporter
+        exec /bin/pgbouncer_exporter
     expose:
       - "9127"
     healthcheck:
