@@ -104,6 +104,7 @@ services:
       retries: 10
     networks:
       - db_plane
+      - obs_plane
 
   pgbackrest:
     build:
@@ -329,7 +330,6 @@ networks:
     internal: true
   obs_plane:
     name: ${COMPOSE_PROJECT_NAME:-db-stack}_obs_plane
-    internal: true
 
 volumes:
   postgres_data:
