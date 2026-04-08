@@ -11,6 +11,10 @@ APP_DB_USER="${APP_DB_USER:?APP_DB_USER is required}"
 PGBOUNCER_AUTH_USER="${PGBOUNCER_AUTH_USER:-pgbouncer_auth}"
 EXPORTER_USER="${POSTGRES_EXPORTER_USER:-postgres_exporter}"
 
+# ---------------------------------------------------------------------------
+# Create roles and database
+# Uses \gexec so psql variables work correctly (no DO $$ blocks needed)
+# ---------------------------------------------------------------------------
 psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" \
   --dbname postgres \
@@ -23,46 +27,43 @@ psql -v ON_ERROR_STOP=1 \
   --set exporter_password="$EXPORTER_PASSWORD" \
   --set replication_user="$REPLICATION_USER" \
   --set replication_password="$REPLICATION_PASSWORD" <<'EOSQL'
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_db_user') THEN
-    EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'app_db_user', :'app_db_password');
-  ELSE
-    EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'app_db_user', :'app_db_password');
-  END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'pgbouncer_auth_user') THEN
-    EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'pgbouncer_auth_user', :'pgbouncer_auth_password');
-  ELSE
-    EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'pgbouncer_auth_user', :'pgbouncer_auth_password');
-  END IF;
+-- App user
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'app_db_user', :'app_db_password')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'app_db_user') \gexec
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'app_db_user', :'app_db_password')
+  WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = :'app_db_user') \gexec
 
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'exporter_user') THEN
-    EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'exporter_user', :'exporter_password');
-  ELSE
-    EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'exporter_user', :'exporter_password');
-  END IF;
+-- PgBouncer auth user
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'pgbouncer_auth_user', :'pgbouncer_auth_password')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'pgbouncer_auth_user') \gexec
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'pgbouncer_auth_user', :'pgbouncer_auth_password')
+  WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = :'pgbouncer_auth_user') \gexec
 
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'replication_user') THEN
-    EXECUTE format('CREATE ROLE %I LOGIN REPLICATION PASSWORD %L', :'replication_user', :'replication_password');
-  ELSE
-    EXECUTE format('ALTER ROLE %I WITH LOGIN REPLICATION PASSWORD %L', :'replication_user', :'replication_password');
-  END IF;
-END
-$$;
+-- Exporter user
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'exporter_user', :'exporter_password')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'exporter_user') \gexec
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'exporter_user', :'exporter_password')
+  WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = :'exporter_user') \gexec
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'app_db_name') THEN
-    EXECUTE format('CREATE DATABASE %I OWNER %I', :'app_db_name', :'app_db_user');
-  END IF;
-END
-$$;
+-- Replication user
+SELECT format('CREATE ROLE %I LOGIN REPLICATION PASSWORD %L', :'replication_user', :'replication_password')
+  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'replication_user') \gexec
+SELECT format('ALTER ROLE %I WITH LOGIN REPLICATION PASSWORD %L', :'replication_user', :'replication_password')
+  WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = :'replication_user') \gexec
 
+-- App database
+SELECT format('CREATE DATABASE %I OWNER %I', :'app_db_name', :'app_db_user')
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'app_db_name') \gexec
+
+-- Monitoring grants
 SELECT format('GRANT pg_monitor TO %I', :'exporter_user') \gexec
 SELECT format('GRANT pg_read_all_stats TO %I', :'exporter_user') \gexec
 EOSQL
 
+# ---------------------------------------------------------------------------
+# Setup on app database (extensions, pgbouncer schema)
+# ---------------------------------------------------------------------------
 psql -v ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" \
   --dbname "$APP_DB_NAME" \
