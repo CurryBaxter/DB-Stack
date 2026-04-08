@@ -54,7 +54,7 @@ services:
       - pgbackrest_repo:/var/lib/pgbackrest
       - ./postgres/conf:/etc/postgres/templates:ro
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
-      - ./pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - ./pgbackrest/pgbackrest.conf.template:/etc/pgbackrest/pgbackrest.conf.template:ro
     command: ["/usr/local/bin/postgres-entrypoint.sh"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DEFAULT_DB:-postgres} -h /var/run/postgresql"]
@@ -76,8 +76,6 @@ services:
       TZ: ${TZ:-UTC}
       APP_DB_NAME: ${APP_DB_NAME}
       APP_DB_USER: ${APP_DB_USER}
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
-      PGBACKREST_STANZA: ${PGBACKREST_STANZA:-main}
       PGBOUNCER_POOL_MODE: ${PGBOUNCER_POOL_MODE:-transaction}
       PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
       PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-50}
@@ -85,20 +83,23 @@ services:
       PGBOUNCER_RESERVE_POOL_TIMEOUT: ${PGBOUNCER_RESERVE_POOL_TIMEOUT:-5}
       PGBOUNCER_SERVER_RESET_QUERY: ${PGBOUNCER_SERVER_RESET_QUERY:-DISCARD ALL}
       PGBOUNCER_AUTH_USER: ${PGBOUNCER_AUTH_USER:-pgbouncer_auth}
-      PGBOUNCER_AUTH_PASSWORD: ${PGBOUNCER_AUTH_PASSWORD}
       PGBOUNCER_ADMIN_USERS: ${PGBOUNCER_ADMIN_USERS:-postgres}
       PGBOUNCER_STATS_USERS: ${PGBOUNCER_STATS_USERS:-postgres_exporter}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: ${POSTGRES_PORT_INTERNAL:-5432}
       POSTGRES_DB: ${POSTGRES_DEFAULT_DB:-postgres}
       PGBOUNCER_LISTEN_PORT: ${PGBOUNCER_PORT_INTERNAL:-6432}
+    secrets:
+      - app_db_password
+      - pgbouncer_auth_password
+      - postgres_exporter_password
     volumes:
       - ./pgbouncer/entrypoint.sh:/entrypoint-custom.sh:ro
     entrypoint: ["/bin/sh", "/entrypoint-custom.sh"]
     ports:
       - "${PGBOUNCER_BIND_ADDRESS:-127.0.0.1}:${PGBOUNCER_PORT:-6432}:${PGBOUNCER_PORT_INTERNAL:-6432}"
     healthcheck:
-      test: ["CMD-SHELL", "ps -ef | grep -q '[p]gbouncer'"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 ${PGBOUNCER_PORT_INTERNAL:-6432} || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -119,12 +120,31 @@ services:
       TZ: ${TZ:-UTC}
       PGBACKREST_STANZA: ${PGBACKREST_STANZA:-main}
       PGDATA: /var/lib/postgresql/18/docker
+      PGBACKREST_PROCESS_MAX: ${PGBACKREST_PROCESS_MAX:-2}
+      PGBACKREST_METRICS_INTERVAL: ${PGBACKREST_METRICS_INTERVAL:-60}
+      BACKUP_REPO1_RETENTION_FULL: ${BACKUP_REPO1_RETENTION_FULL:-14}
+      BACKUP_REPO1_RETENTION_DIFF: ${BACKUP_REPO1_RETENTION_DIFF:-7}
+      BACKUP_REPO2_ENABLED: ${BACKUP_REPO2_ENABLED:-false}
+      BACKUP_REPO2_TYPE: ${BACKUP_REPO2_TYPE:-s3}
+      BACKUP_REPO2_PATH: ${BACKUP_REPO2_PATH:-/pgbackrest}
+      BACKUP_REPO2_BUCKET: ${BACKUP_REPO2_BUCKET:-}
+      BACKUP_REPO2_ENDPOINT: ${BACKUP_REPO2_ENDPOINT:-}
+      BACKUP_REPO2_REGION: ${BACKUP_REPO2_REGION:-eu-central-1}
+      BACKUP_REPO2_RETENTION_FULL: ${BACKUP_REPO2_RETENTION_FULL:-30}
+      BACKUP_REPO2_RETENTION_DIFF: ${BACKUP_REPO2_RETENTION_DIFF:-14}
+    secrets:
+      - source: repo2_s3_key
+        target: repo2_s3_key
+      - source: repo2_s3_secret
+        target: repo2_s3_secret
     volumes:
       - postgres_data:/var/lib/postgresql:ro
       - postgres_socket:/var/run/postgresql
       - pgbackrest_repo:/var/lib/pgbackrest
-      - ./pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - ./pgbackrest/pgbackrest.conf.template:/etc/pgbackrest/pgbackrest.conf.template:ro
       - ./pgbackrest/entrypoint.sh:/usr/local/bin/pgbackrest-sidecar.sh:ro
+      - ./pgbackrest/textfile-collector.sh:/usr/local/bin/pgbackrest-textfile-collector.sh:ro
+      - textfile_collector:/var/lib/node-exporter/textfile
     command: ["/bin/bash", "/usr/local/bin/pgbackrest-sidecar.sh"]
     healthcheck:
       test: ["CMD-SHELL", "pgbackrest --stanza=${PGBACKREST_STANZA:-main} info >/dev/null 2>&1 || exit 1"]
@@ -142,15 +162,57 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    secrets:
+      - postgres_exporter_password
     environment:
       DATA_SOURCE_URI: "postgres:${POSTGRES_PORT_INTERNAL:-5432}/${POSTGRES_DEFAULT_DB:-postgres}?sslmode=disable"
       DATA_SOURCE_USER: ${POSTGRES_EXPORTER_USER:-postgres_exporter}
-      DATA_SOURCE_PASS: ${POSTGRES_EXPORTER_PASSWORD}
       PG_EXPORTER_AUTO_DISCOVER_DATABASES: "false"
       PG_EXPORTER_DISABLE_DEFAULT_METRICS: "false"
       PG_EXPORTER_DISABLE_SETTINGS_METRICS: "false"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        export DATA_SOURCE_PASS="$$(cat /run/secrets/postgres_exporter_password)"
+        exec /bin/postgres_exporter
     expose:
       - "9187"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9187/metrics >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - db_plane
+      - obs_plane
+
+  pgbouncer_exporter:
+    image: quay.io/prometheuscommunity/pgbouncer-exporter:v0.10.2
+    container_name: ${COMPOSE_PROJECT_NAME:-db-stack}-pgbouncer-exporter
+    restart: unless-stopped
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    secrets:
+      - postgres_exporter_password
+    environment:
+      PGBOUNCER_EXPORTER_HOST: pgbouncer
+      PGBOUNCER_EXPORTER_PORT: ${PGBOUNCER_PORT_INTERNAL:-6432}
+      PGBOUNCER_EXPORTER_USER: ${PGBOUNCER_STATS_USERS:-postgres_exporter}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        export PGBOUNCER_EXPORTER_PASS="$$(cat /run/secrets/postgres_exporter_password)"
+        exec /bin/pgbouncer-exporter
+    expose:
+      - "9127"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9127/metrics >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - db_plane
       - obs_plane
@@ -163,11 +225,19 @@ services:
       - "--path.rootfs=/host"
       - "--collector.systemd"
       - "--collector.processes"
+      - "--collector.textfile.directory=/var/lib/node-exporter/textfile"
     pid: host
     volumes:
       - /:/host:ro,rslave
+      - textfile_collector:/var/lib/node-exporter/textfile:ro
     expose:
       - "9100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9100/metrics >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - obs_plane
 
@@ -177,6 +247,7 @@ services:
     restart: unless-stopped
     depends_on:
       - postgres_exporter
+      - pgbouncer_exporter
       - node_exporter
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -185,9 +256,39 @@ services:
       - "--web.enable-lifecycle"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts:/etc/prometheus/alerts:ro
       - prometheus_data:/prometheus
     ports:
       - "${PROMETHEUS_BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/healthy >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - obs_plane
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: ${COMPOSE_PROJECT_NAME:-db-stack}-alertmanager
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    expose:
+      - "9093"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9093/-/healthy >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - obs_plane
 
@@ -201,16 +302,24 @@ services:
       GF_SERVER_DOMAIN: ${GRAFANA_DOMAIN:-localhost}
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_INSTALL_PLUGINS: ""
+    secrets:
+      - grafana_admin_password
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "${GRAFANA_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - obs_plane
 
@@ -233,6 +342,10 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-db-stack}_prometheus_data
   grafana_data:
     name: ${COMPOSE_PROJECT_NAME:-db-stack}_grafana_data
+  alertmanager_data:
+    name: ${COMPOSE_PROJECT_NAME:-db-stack}_alertmanager_data
+  textfile_collector:
+    name: ${COMPOSE_PROJECT_NAME:-db-stack}_textfile_collector
 
 secrets:
   postgres_superuser_password:
@@ -245,3 +358,9 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/postgres_exporter_password.txt
   postgres_replication_password:
     file: ${SECRETS_DIR:-./secrets}/postgres_replication_password.txt
+  grafana_admin_password:
+    file: ${SECRETS_DIR:-./secrets}/grafana_admin_password.txt
+  repo2_s3_key:
+    file: ${SECRETS_DIR:-./secrets}/repo2_s3_key.txt
+  repo2_s3_secret:
+    file: ${SECRETS_DIR:-./secrets}/repo2_s3_secret.txt

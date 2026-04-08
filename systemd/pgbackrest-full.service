@@ -1,0 +1,15 @@
+[Unit]
+Description=pgBackRest Full Backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/db-stack
+ExecStart=/usr/bin/docker compose exec -T pgbackrest pgbackrest --stanza=main backup --type=full
+TimeoutStartSec=3600
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

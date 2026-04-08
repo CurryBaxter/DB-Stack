@@ -1,0 +1,62 @@
+groups:
+  - name: backup
+    rules:
+      # -----------------------------------------------------------------------
+      # pgBackRest
+      # -----------------------------------------------------------------------
+      - alert: BackupTooOld
+        expr: pgbackrest_backup_since_last_seconds > 86400
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Last backup is older than 24h ({{ $labels.stanza }})"
+          description: "pgBackRest reports {{ $value | humanizeDuration }} since the last successful backup."
+
+      - alert: BackupCriticallyOld
+        expr: pgbackrest_backup_since_last_seconds > 172800
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Last backup is older than 48h ({{ $labels.stanza }})"
+          description: "pgBackRest reports {{ $value | humanizeDuration }} since the last successful backup. Immediate action required."
+
+      - alert: BackupRepoUnhealthy
+        expr: pgbackrest_repo_status == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "pgBackRest repository unhealthy ({{ $labels.stanza }})"
+          description: "pgbackrest info reports an error state for the backup repository."
+
+      - alert: BackupCollectorDown
+        expr: up{job="node"} == 1 and absent(pgbackrest_backup_since_last_seconds)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "pgBackRest metrics not being collected"
+          description: "node_exporter is up but pgbackrest textfile metrics are missing. Check the textfile-collector sidecar."
+
+      # -----------------------------------------------------------------------
+      # WAL Archiving
+      # -----------------------------------------------------------------------
+      - alert: WALArchivingFailing
+        expr: increase(pg_stat_archiver_failed_count[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WAL archiving failures detected"
+          description: "{{ $value }} WAL archive failures in the last hour."
+
+      - alert: WALArchivingStalled
+        expr: increase(pg_stat_archiver_archived_count[30m]) == 0 and pg_stat_archiver_archived_count > 0
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WAL archiving has stalled"
+          description: "No WAL files archived in the last 30 minutes despite prior activity."

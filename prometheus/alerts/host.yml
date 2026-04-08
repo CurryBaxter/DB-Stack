@@ -1,0 +1,86 @@
+groups:
+  - name: host
+    rules:
+      # -----------------------------------------------------------------------
+      # Disk
+      # -----------------------------------------------------------------------
+      - alert: DiskUsageHigh
+        expr: 1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage above 85%"
+          description: "Root filesystem is {{ $value | humanizePercentage }} full."
+
+      - alert: DiskUsageCritical
+        expr: 1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage above 95%"
+          description: "Root filesystem is {{ $value | humanizePercentage }} full. Immediate action required."
+
+      - alert: DiskWillFillIn24h
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"}[6h], 24*3600) < 0
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk predicted to fill within 24 hours"
+          description: "Based on the last 6h trend, the root filesystem will run out of space."
+
+      # -----------------------------------------------------------------------
+      # Memory
+      # -----------------------------------------------------------------------
+      - alert: MemoryUsageHigh
+        expr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory usage above 90%"
+          description: "Only {{ $value | humanizePercentage }} of memory remains available."
+
+      - alert: MemoryUsageCritical
+        expr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Memory usage above 95%"
+          description: "System is nearly out of memory. OOM kills may occur."
+
+      # -----------------------------------------------------------------------
+      # CPU
+      # -----------------------------------------------------------------------
+      - alert: CPUUsageHigh
+        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU usage above 90% for 15 minutes"
+          description: "Sustained high CPU may indicate resource contention."
+
+      # -----------------------------------------------------------------------
+      # Host / System
+      # -----------------------------------------------------------------------
+      - alert: FilesystemReadOnly
+        expr: node_filesystem_readonly{mountpoint="/"} == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Root filesystem is read-only"
+          description: "The root filesystem has been remounted read-only. This usually indicates a disk error."
+
+      - alert: NodeExporterDown
+        expr: up{job="node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "node_exporter is unreachable"
+          description: "Host metrics are not being collected."

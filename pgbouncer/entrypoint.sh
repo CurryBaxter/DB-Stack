@@ -1,8 +1,12 @@
 #!/bin/sh
 set -eu
 
-APP_DB_PASSWORD="${APP_DB_PASSWORD}"
-AUTH_PASSWORD="${PGBOUNCER_AUTH_PASSWORD}"
+# ---------------------------------------------------------------------------
+# Read passwords from secret files
+# ---------------------------------------------------------------------------
+APP_DB_PASSWORD="$(cat /run/secrets/app_db_password)"
+AUTH_PASSWORD="$(cat /run/secrets/pgbouncer_auth_password)"
+STATS_PASSWORD="$(cat /run/secrets/postgres_exporter_password)"
 
 cat > /tmp/pgbouncer.ini <<CONFIG
 [databases]
@@ -39,5 +43,6 @@ CONFIG
 
 printf '"%s" "%s"\n' "${APP_DB_USER}" "${APP_DB_PASSWORD}" > /etc/pgbouncer/userlist.txt
 printf '"%s" "%s"\n' "${PGBOUNCER_AUTH_USER}" "${AUTH_PASSWORD}" >> /etc/pgbouncer/userlist.txt
+printf '"%s" "%s"\n' "${PGBOUNCER_STATS_USERS}" "${STATS_PASSWORD}" >> /etc/pgbouncer/userlist.txt
 
 exec pgbouncer /tmp/pgbouncer.ini

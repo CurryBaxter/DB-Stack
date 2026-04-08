@@ -1,0 +1,10 @@
+[Unit]
+Description=pgBackRest Differential Backup every 6 hours
+
+[Timer]
+OnCalendar=*-*-* 00/6:30:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,107 @@
+groups:
+  - name: postgres
+    rules:
+      # -----------------------------------------------------------------------
+      # Availability
+      # -----------------------------------------------------------------------
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "postgres_exporter cannot reach the database."
+
+      # -----------------------------------------------------------------------
+      # Connections
+      # -----------------------------------------------------------------------
+      - alert: ConnectionsHigh
+        expr: sum(pg_stat_activity_count) / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection usage above 80%"
+          description: "{{ $value | humanizePercentage }} of max_connections in use."
+
+      - alert: ConnectionsCritical
+        expr: sum(pg_stat_activity_count) / pg_settings_max_connections > 0.95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL connection usage above 95%"
+          description: "{{ $value | humanizePercentage }} of max_connections in use. New connections may be rejected."
+
+      # -----------------------------------------------------------------------
+      # Performance
+      # -----------------------------------------------------------------------
+      - alert: CacheHitRatioLow
+        expr: pg_stat_database_blks_hit{datname!~"template.*"} / (pg_stat_database_blks_hit{datname!~"template.*"} + pg_stat_database_blks_read{datname!~"template.*"} + 1) < 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cache hit ratio below 90% on {{ $labels.datname }}"
+          description: "Current ratio: {{ $value | humanizePercentage }}. Consider increasing shared_buffers."
+
+      - alert: DeadlocksDetected
+        expr: increase(pg_stat_database_deadlocks{datname!~"template.*"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deadlocks detected on {{ $labels.datname }}"
+          description: "{{ $value }} deadlocks in the last 5 minutes."
+
+      - alert: LongRunningTransactions
+        expr: max(pg_stat_activity_max_tx_duration{state="active"}) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long-running transaction detected"
+          description: "A transaction has been active for {{ $value | humanizeDuration }}."
+
+      # -----------------------------------------------------------------------
+      # Replication (fires only when replicas exist)
+      # -----------------------------------------------------------------------
+      - alert: ReplicationLagHigh
+        expr: pg_stat_replication_pg_wal_lsn_diff > 104857600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Replication lag above 100 MB"
+          description: "Replica {{ $labels.application_name }} is {{ $value | humanize1024 }}B behind."
+
+      # -----------------------------------------------------------------------
+      # PgBouncer
+      # -----------------------------------------------------------------------
+      - alert: PgBouncerDown
+        expr: pgbouncer_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PgBouncer is down"
+          description: "pgbouncer_exporter cannot reach PgBouncer."
+
+      - alert: PgBouncerWaitingClientsHigh
+        expr: sum(pgbouncer_pools_client_waiting_connections) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PgBouncer has {{ $value }} waiting clients"
+          description: "Clients are queuing for a server connection. Consider increasing pool size."
+
+      - alert: PgBouncerWaitingClientsCritical
+        expr: sum(pgbouncer_pools_client_waiting_connections) > 100
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PgBouncer has {{ $value }} waiting clients"
+          description: "Significant connection queueing. Application performance is likely degraded."
