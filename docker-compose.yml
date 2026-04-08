@@ -197,13 +197,14 @@ services:
     secrets:
       - postgres_exporter_password
     environment:
-      PGBOUNCER_EXPORTER_HOST: pgbouncer
-      PGBOUNCER_EXPORTER_PORT: ${PGBOUNCER_PORT_INTERNAL:-6432}
-      PGBOUNCER_EXPORTER_USER: ${PGBOUNCER_STATS_USERS:-postgres_exporter}
+      PGBOUNCER_STATS_USER: ${PGBOUNCER_STATS_USERS:-postgres_exporter}
+      PGBOUNCER_HOST: pgbouncer
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT_INTERNAL:-6432}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        export PGBOUNCER_EXPORTER_PASS="$$(cat /run/secrets/postgres_exporter_password)"
+        PASS="$$(cat /run/secrets/postgres_exporter_password)"
+        export PGBOUNCER_EXPORTER_CONNECTION_STRING="postgres://$${PGBOUNCER_STATS_USER}:$${PASS}@$${PGBOUNCER_HOST}:$${PGBOUNCER_PORT}/pgbouncer?sslmode=disable"
         exec /bin/pgbouncer_exporter
     expose:
       - "9127"
