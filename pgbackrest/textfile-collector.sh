@@ -6,7 +6,7 @@
 set -euo pipefail
 
 TEXTFILE_DIR="/var/lib/node-exporter/textfile"
-INTERVAL="${PGBACKREST_METRICS_INTERVAL:-60}"
+INTERVAL="${METRICS_COLLECTOR_INTERVAL:-60}"
 STANZA="${PGBACKREST_STANZA:-main}"
 
 mkdir -p "${TEXTFILE_DIR}"

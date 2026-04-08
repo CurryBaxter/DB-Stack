@@ -48,6 +48,7 @@ fi
 # ---------------------------------------------------------------------------
 mkdir -p /var/lib/pgbackrest /var/lib/pgbackrest/spool /var/log/pgbackrest /tmp/pgbackrest-config
 chmod 750 /var/lib/pgbackrest /var/lib/pgbackrest/spool
+chown -R postgres:postgres /var/lib/pgbackrest /var/log/pgbackrest /tmp/pgbackrest-config
 
 envsubst < /etc/pgbackrest/pgbackrest.conf.template > /tmp/pgbackrest-config/pgbackrest.conf
 
@@ -55,14 +56,14 @@ envsubst < /etc/pgbackrest/pgbackrest.conf.template > /tmp/pgbackrest-config/pgb
 ln -sf /tmp/pgbackrest-config/pgbackrest.conf /etc/pgbackrest/pgbackrest.conf
 
 # ---------------------------------------------------------------------------
-# Initialize stanza (idempotent)
+# Initialize stanza as postgres user (peer auth via unix socket)
 # ---------------------------------------------------------------------------
 if [ -f "${PGDATA}/PG_VERSION" ]; then
-  pgbackrest --stanza="${PGBACKREST_STANZA}" stanza-create --no-online 2>/dev/null \
-    || pgbackrest --stanza="${PGBACKREST_STANZA}" stanza-create 2>/dev/null \
+  gosu postgres pgbackrest --stanza="${PGBACKREST_STANZA}" stanza-create --no-online 2>/dev/null \
+    || gosu postgres pgbackrest --stanza="${PGBACKREST_STANZA}" stanza-create 2>/dev/null \
     || echo "WARN: stanza-create failed (may already exist)"
 
-  pgbackrest --stanza="${PGBACKREST_STANZA}" check 2>/dev/null \
+  gosu postgres pgbackrest --stanza="${PGBACKREST_STANZA}" check 2>/dev/null \
     || echo "WARN: stanza check failed (postgres may still be starting)"
 fi
 
@@ -73,4 +74,5 @@ if [ -f /usr/local/bin/pgbackrest-textfile-collector.sh ]; then
   /bin/bash /usr/local/bin/pgbackrest-textfile-collector.sh &
 fi
 
+# Keep container running — backups triggered externally via systemd timer
 exec tail -f /dev/null
