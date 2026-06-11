@@ -75,6 +75,8 @@ services:
       TZ: ${TZ:-UTC}
       APP_DB_NAME: ${APP_DB_NAME}
       APP_DB_USER: ${APP_DB_USER}
+      EXTRA_DB_NAMES: ${EXTRA_DB_NAMES:-}
+      EXTRA_DB_USERS: ${EXTRA_DB_USERS:-}
       PGBOUNCER_POOL_MODE: ${PGBOUNCER_POOL_MODE:-transaction}
       PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
       PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-50}
@@ -92,6 +94,8 @@ services:
       - app_db_password
       - pgbouncer_auth_password
       - postgres_exporter_password
+      - source: auth_gateway_service_password
+        target: extra_db_password_auth_gateway_service
     volumes:
       - ./pgbouncer/entrypoint.sh:/entrypoint-custom.sh:ro
     entrypoint: ["/bin/sh", "/entrypoint-custom.sh"]
@@ -364,3 +368,5 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/repo2_s3_key.txt
   repo2_s3_secret:
     file: ${SECRETS_DIR:-./secrets}/repo2_s3_secret.txt
+  auth_gateway_service_password:
+    file: ${SECRETS_DIR:-./secrets}/auth_gateway_service_password.txt

@@ -84,6 +84,13 @@ Pragmatischer Betriebsansatz auf einem einzelnen Host unter Debian 13:
 - engmaschige `check`-Runs, z. B. alle 15 Minuten
 - zusätzliche externe Replikation des Backup-Repositories, etwa per `restic`, `rclone` oder Storage Box
 
+Für eine einmalige Extraktion vor dem Abschalten eines Deployments gibt es zusätzlich einen rein logischen Export:
+
+- `./scripts/pull-logical-backup.sh user@host`
+- zieht alle nicht-template Datenbanken als `pg_dump -Fc` auf den lokalen Rechner
+- ergänzt optional `globals.sql` für Rollen, Grants und Tablespaces
+- gedacht für Datenmitnahme oder Ad-hoc-Restore, nicht als Ersatz für pgBackRest/PITR
+
 ## Regelmäßig zu sichernde Verzeichnisse
 
 - Docker-Volume `postgres_data`
