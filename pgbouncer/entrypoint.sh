@@ -41,6 +41,7 @@ unix_socket_dir = /tmp
 
 auth_type = scram-sha-256
 auth_user = ${PGBOUNCER_AUTH_USER}
+auth_dbname = ${APP_DB_NAME}
 auth_query = SELECT username, password FROM pgbouncer.user_lookup(\$1)
 auth_file = /etc/pgbouncer/userlist.txt
 

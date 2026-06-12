@@ -61,6 +61,8 @@ SELECT format('GRANT pg_monitor TO %I', :'exporter_user') \gexec
 SELECT format('GRANT pg_read_all_stats TO %I', :'exporter_user') \gexec
 EOSQL
 
+/usr/local/bin/provision-extra-dbs.sh
+
 # ---------------------------------------------------------------------------
 # Setup on app database (extensions, pgbouncer schema)
 # ---------------------------------------------------------------------------

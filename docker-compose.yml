@@ -16,6 +16,8 @@ services:
       PGDATA: /var/lib/postgresql/18/docker
       APP_DB_NAME: ${APP_DB_NAME}
       APP_DB_USER: ${APP_DB_USER}
+      EXTRA_DB_NAMES: ${EXTRA_DB_NAMES:-}
+      EXTRA_DB_USERS: ${EXTRA_DB_USERS:-}
       PGBOUNCER_AUTH_USER: ${PGBOUNCER_AUTH_USER:-pgbouncer_auth}
       POSTGRES_EXPORTER_USER: ${POSTGRES_EXPORTER_USER:-postgres_exporter}
       POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
@@ -48,12 +50,17 @@ services:
       - pgbouncer_auth_password
       - postgres_exporter_password
       - postgres_replication_password
+      - source: auth_gateway_service_password
+        target: extra_db_password_auth_gateway_service
+      - source: billing_service_password
+        target: extra_db_password_billing_service
     volumes:
       - postgres_data:/var/lib/postgresql
       - postgres_socket:/var/run/postgresql
       - pgbackrest_repo:/var/lib/pgbackrest
       - ./postgres/conf:/etc/postgres/templates:ro
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ./postgres/provision-extra-dbs.sh:/usr/local/bin/provision-extra-dbs.sh:ro
     command: ["/usr/local/bin/postgres-entrypoint.sh"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DEFAULT_DB:-postgres} -h /var/run/postgresql"]
@@ -96,6 +103,8 @@ services:
       - postgres_exporter_password
       - source: auth_gateway_service_password
         target: extra_db_password_auth_gateway_service
+      - source: billing_service_password
+        target: extra_db_password_billing_service
     volumes:
       - ./pgbouncer/entrypoint.sh:/entrypoint-custom.sh:ro
     entrypoint: ["/bin/sh", "/entrypoint-custom.sh"]
@@ -370,3 +379,5 @@ secrets:
     file: ${SECRETS_DIR:-./secrets}/repo2_s3_secret.txt
   auth_gateway_service_password:
     file: ${SECRETS_DIR:-./secrets}/auth_gateway_service_password.txt
+  billing_service_password:
+    file: ${SECRETS_DIR:-./secrets}/billing_service_password.txt
