@@ -1,4 +1,4 @@
-FROM postgres:18-trixie
+FROM pgvector/pgvector:pg18-trixie
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends pgbackrest gettext-base ca-certificates procps \
